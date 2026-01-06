@@ -1,0 +1,250 @@
+-- note: you can modify ts however you want, i don't give a fuck, js credit my discord please: @deadshizik
+
+local player = game.Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+
+-- Очистка старых версий
+for _, name in pairs({"OutcomeMemoriesUI", "autosolver_final"}) do
+    local old = CoreGui:FindFirstChild(name) or player.PlayerGui:FindFirstChild(name)
+    if old then old:Destroy() end
+end
+
+--- НАСТРОЙКИ ---
+local SETTINGS = {
+    TriggerBot = {
+        Enabled = false,
+        Cooldown = 0.4,
+        Distance = 8, 
+    },
+    Visual = {
+        ESP = false,
+    }
+}
+
+local probe = nil
+local probeWeld = nil
+local lastAttackTime = 0
+
+-- --- ESP ЛОГИКА ---
+local function updateESP()
+    for _, p in pairs(game.Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            local char = p.Character
+            local espFolder = char:FindFirstChild("OutcomeESP")
+            
+            if SETTINGS.Visual.ESP then
+                if not espFolder then
+                    local isKiller = char:GetAttribute("Team") == "EXE" or p:GetAttribute("Team") == "EXE"
+                    local color = isKiller and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
+                    
+                    espFolder = Instance.new("Folder", char)
+                    espFolder.Name = "OutcomeESP"
+
+                    local hl = Instance.new("Highlight", espFolder)
+                    hl.Adornee = char
+                    hl.FillColor = color
+                    hl.FillTransparency = 0.5
+                    hl.OutlineColor = Color3.new(1, 1, 1)
+
+                    local bb = Instance.new("BillboardGui", espFolder)
+                    bb.Name = "Tag"
+                    bb.Size = UDim2.new(0, 100, 0, 40)
+                    bb.AlwaysOnTop = true
+                    bb.ExtentsOffset = Vector3.new(0, 3.5, 0)
+                    bb.Adornee = char
+                    
+                    local lbl = Instance.new("TextLabel", bb)
+                    lbl.BackgroundTransparency = 1
+                    lbl.Size = UDim2.new(1, 0, 1, 0)
+                    lbl.Text = isKiller and "killer" or "survivor"
+                    lbl.TextColor3 = color
+                    lbl.Font = Enum.Font.GothamBold
+                    lbl.TextSize = 12
+                end
+            else
+                if espFolder then espFolder:Destroy() end
+            end
+        end
+    end
+end
+
+-- --- ГЛАВНЫЙ ЦИКЛ (ФИКС ТЕЛЕПОРТАЦИИ) ---
+RunService.RenderStepped:Connect(function()
+    updateESP()
+
+    if SETTINGS.TriggerBot.Enabled then
+        local char = player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        
+        if root then
+            -- СОЗДАНИЕ ХИТБОКСА (БЕЗ ФИЗИКИ)
+            if not probe or probe.Parent ~= char then
+                if probe then probe:Destroy() end
+                
+                probe = Instance.new("Part")
+                probe.Name = "Outcome_Trigger_Fixed"
+                probe.CanCollide = false
+                probe.CanQuery = false
+                probe.CanTouch = false
+                probe.Massless = true
+                probe.Transparency = 0.7
+                probe.Color = Color3.fromRGB(255, 255, 0)
+                -- Убираем физику на 100%
+                probe.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
+                probe.Parent = char
+
+                -- Используем обычный Weld вместо WeldConstraint для стабильности смещения
+                probeWeld = Instance.new("Weld")
+                probeWeld.Part0 = root
+                probeWeld.Part1 = probe
+                probeWeld.Parent = probe
+            end
+
+            -- Обновляем длину и смещение через Weld.C1 (ЭТО НЕ ТЕПАЕТ)
+            local dist = SETTINGS.TriggerBot.Distance
+            probe.Size = Vector3.new(7, 7, dist)
+            probeWeld.C1 = CFrame.new(0, 0, dist/2) -- Смещение ровно на половину длины вперед
+
+            -- Твоя логика триггера
+            if tick() - lastAttackTime >= SETTINGS.TriggerBot.Cooldown then
+                local foundEnemy = false
+                local parts = workspace:GetPartsInPart(probe)
+
+                for _, part in ipairs(parts) do
+                    local m = part.Parent
+                    if m:FindFirstChild("Humanoid") and m ~= char then
+                        foundEnemy = true
+                        break
+                    end
+                end
+
+                if foundEnemy then
+                    lastAttackTime = tick()
+                    if mouse1press then 
+                        mouse1press() task.wait(0.01) mouse1release()
+                    else 
+                        game:GetService("VirtualUser"):ClickButton1(Vector2.new(0,0)) 
+                    end
+                end
+            end
+        end
+    else
+        if probe then probe:Destroy(); probe = nil end
+    end
+end)
+
+-- --- ИНТЕРФЕЙС ---
+local screenGui = Instance.new("ScreenGui", CoreGui)
+screenGui.Name = "OutcomeMemoriesUI"
+
+local header = Instance.new("Frame", screenGui)
+header.Size = UDim2.new(0, 340, 0, 35)
+header.Position = UDim2.new(0.5, -170, 0.3, 0)
+header.BackgroundColor3 = Color3.fromRGB(30, 30, 30); header.BorderSizePixel = 0
+header.Draggable, header.Active = true, true
+
+local title = Instance.new("TextLabel", header)
+title.Size = UDim2.new(1, -70, 1, 0); title.Position = UDim2.new(0, 15, 0, 0)
+title.Text = "outcome memories | dc: @deadshizik"
+title.TextColor3 = Color3.new(1, 1, 1); title.Font = Enum.Font.GothamBold; title.TextSize = 13
+title.TextXAlignment = Enum.TextXAlignment.Left; title.BackgroundTransparency = 1
+
+local mainBody = Instance.new("Frame", header)
+mainBody.Size = UDim2.new(1, 0, 0, 180)
+mainBody.Position = UDim2.new(0, 0, 1, 1)
+mainBody.BackgroundColor3 = Color3.fromRGB(0, 0, 0); mainBody.BorderSizePixel = 0
+
+local sideBar = Instance.new("Frame", mainBody)
+sideBar.Size = UDim2.new(0, 80, 1, 0); sideBar.BackgroundColor3 = Color3.fromRGB(10, 10, 10); sideBar.BorderSizePixel = 0
+
+local minimizeBtn = Instance.new("TextButton", header)
+minimizeBtn.Size = UDim2.new(0, 25, 0, 25); minimizeBtn.Position = UDim2.new(1, -30, 0, 5)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45); minimizeBtn.BorderSizePixel = 0
+minimizeBtn.Text = "-"; minimizeBtn.TextColor3 = Color3.new(1, 1, 1); minimizeBtn.Font = Enum.Font.GothamBold; minimizeBtn.TextSize = 18
+
+minimizeBtn.MouseButton1Click:Connect(function()
+    mainBody.Visible = not mainBody.Visible
+    minimizeBtn.Text = mainBody.Visible and "-" or "+"
+end)
+
+local function createToggle(parent, text, pos, default, callback)
+    local frame = Instance.new("Frame", parent)
+    frame.Size = UDim2.new(1, 0, 0, 30); frame.Position = pos; frame.BackgroundTransparency = 1
+    local lbl = Instance.new("TextLabel", frame)
+    lbl.Size = UDim2.new(0, 120, 1, 0); lbl.Text = text:lower(); lbl.TextColor3 = Color3.fromRGB(180, 180, 180)
+    lbl.Font = Enum.Font.Gotham; lbl.TextSize = 12; lbl.BackgroundTransparency = 1; lbl.TextXAlignment = Enum.TextXAlignment.Left
+    local bg = Instance.new("Frame", frame)
+    bg.Size = UDim2.new(0, 34, 0, 16); bg.Position = UDim2.new(1, -34, 0.5, -8)
+    bg.BackgroundColor3 = Color3.fromRGB(20, 20, 20); bg.BorderSizePixel = 1; bg.BorderColor3 = Color3.fromRGB(50, 50, 50)
+    local box = Instance.new("Frame", bg)
+    box.Size = UDim2.new(0, 8, 0, 8); box.Position = default and UDim2.new(1, -11, 0.5, -4) or UDim2.new(0, 3, 0.5, -4)
+    box.BackgroundColor3 = default and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(60, 60, 60); box.BorderSizePixel = 0
+    local btn = Instance.new("TextButton", bg)
+    btn.Size = UDim2.new(1, 0, 1, 0); btn.BackgroundTransparency = 1; btn.Text = ""
+    btn.MouseButton1Click:Connect(function()
+        default = not default
+        box.Position = default and UDim2.new(1, -11, 0.5, -4) or UDim2.new(0, 3, 0.5, -4)
+        box.BackgroundColor3 = default and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(60, 60, 60)
+        callback(default)
+    end)
+end
+
+local function createSlider(parent, text, pos, minV, maxV, default, callback)
+    local frame = Instance.new("Frame", parent)
+    frame.Size = UDim2.new(1, 0, 0, 45); frame.Position = pos; frame.BackgroundTransparency = 1
+    local lbl = Instance.new("TextLabel", frame)
+    lbl.Size = UDim2.new(1, 0, 0, 15); lbl.Text = text:lower(); lbl.TextColor3 = Color3.fromRGB(130, 130, 130)
+    lbl.Font = Enum.Font.Gotham; lbl.TextSize = 11; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.BackgroundTransparency = 1
+    local sBack = Instance.new("Frame", frame)
+    sBack.Size = UDim2.new(1, -50, 0, 2); sBack.Position = UDim2.new(0, 0, 0, 30); sBack.BackgroundColor3 = Color3.fromRGB(50, 50, 50); sBack.BorderSizePixel = 0
+    local sBtn = Instance.new("Frame", sBack)
+    sBtn.Size = UDim2.new(0, 4, 0, 12); sBtn.Position = UDim2.new((default - minV)/(maxV - minV), -2, 0.5, -6)
+    sBtn.BackgroundColor3 = Color3.fromRGB(200, 200, 200); sBtn.BorderSizePixel = 0
+    local valLbl = Instance.new("TextLabel", frame)
+    valLbl.Size = UDim2.new(0, 40, 0, 20); valLbl.Position = UDim2.new(1, -40, 0, 21); valLbl.Text = tostring(default)
+    valLbl.TextColor3 = Color3.new(1, 1, 1); valLbl.Font = Enum.Font.Code; valLbl.TextSize = 11; valLbl.BackgroundTransparency = 1
+
+    local dragging = false
+    local function update(input)
+        local rel = math.clamp((input.Position.X - sBack.AbsolutePosition.X) / sBack.AbsoluteSize.X, 0, 1)
+        local val = math.round(minV + (maxV - minV) * rel)
+        sBtn.Position = UDim2.new(rel, -2, 0.5, -6)
+        valLbl.Text = tostring(val)
+        callback(val)
+    end
+    sBack.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; update(i) end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+    UserInputService.InputChanged:Connect(function(i) if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then update(i) end end)
+end
+
+local killerTab = Instance.new("Frame", mainBody)
+killerTab.Size = UDim2.new(1, -100, 1, -20); killerTab.Position = UDim2.new(0, 90, 0, 10); killerTab.BackgroundTransparency = 1
+local visualTab = Instance.new("Frame", mainBody)
+visualTab.Size = UDim2.new(1, -100, 1, -20); visualTab.Position = UDim2.new(0, 90, 0, 10); visualTab.BackgroundTransparency = 1
+visualTab.Visible = false
+
+local function makeTabBtn(name, frame, pos)
+    local b = Instance.new("TextButton", sideBar)
+    b.Size = UDim2.new(1, 0, 0, 45); b.Position = UDim2.new(0, 0, 0, pos)
+    b.Text = name; b.Font = Enum.Font.GothamBold; b.BorderSizePixel = 0
+    b.BackgroundColor3 = frame.Visible and Color3.fromRGB(20, 20, 20) or Color3.fromRGB(0, 0, 0)
+    b.TextColor3 = frame.Visible and Color3.new(1, 1, 1) or Color3.new(0.5, 0.5, 0.5)
+    b.MouseButton1Click:Connect(function()
+        killerTab.Visible = false; visualTab.Visible = false; frame.Visible = true
+        for _, v in ipairs(sideBar:GetChildren()) do
+            if v:IsA("TextButton") then
+                v.BackgroundColor3 = Color3.fromRGB(0, 0, 0); v.TextColor3 = Color3.new(0.5, 0.5, 0.5)
+            end
+        end
+        b.BackgroundColor3 = Color3.fromRGB(20, 20, 20); b.TextColor3 = Color3.new(1, 1, 1)
+    end)
+end
+
+makeTabBtn("killer", killerTab, 0)
+makeTabBtn("visual", visualTab, 45)
+
+createToggle(killerTab, "trigger bot", UDim2.new(0, 0, 0, 0), SETTINGS.TriggerBot.Enabled, function(v) SETTINGS.TriggerBot.Enabled = v end)
+createSlider(killerTab, "distance", UDim2.new(0, 0, 0, 40), 1, 25, SETTINGS.TriggerBot.Distance, function(v) SETTINGS.TriggerBot.Distance = v end)
+createToggle(visualTab, "esp", UDim2.new(0, 0, 0, 0), SETTINGS.Visual.ESP, function(v) SETTINGS.Visual.ESP = v end)
