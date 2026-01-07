@@ -4,14 +4,13 @@ local player = game.Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
 
--- Очистка старых версий
 for _, name in pairs({"OutcomeMemoriesUI", "autosolver_final"}) do
     local old = CoreGui:FindFirstChild(name) or player.PlayerGui:FindFirstChild(name)
     if old then old:Destroy() end
 end
 
---- НАСТРОЙКИ ---
 local SETTINGS = {
     TriggerBot = {
         Enabled = false,
@@ -26,60 +25,85 @@ local SETTINGS = {
 local probe = nil
 local probeWeld = nil
 local lastAttackTime = 0
+local espCache = {}
 
--- --- ESP ЛОГИКА ---
 local function updateESP()
-    for _, p in pairs(game.Players:GetPlayers()) do
-        if p ~= player and p.Character then
-            local char = p.Character
-            local espFolder = char:FindFirstChild("OutcomeESP")
-            
-            if SETTINGS.Visual.ESP then
-                if not espFolder then
-                    local isKiller = char:GetAttribute("Team") == "EXE" or p:GetAttribute("Team") == "EXE"
-                    local color = isKiller and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
-                    
-                    espFolder = Instance.new("Folder", char)
-                    espFolder.Name = "OutcomeESP"
-
-                    local hl = Instance.new("Highlight", espFolder)
-                    hl.Adornee = char
-                    hl.FillColor = color
-                    hl.FillTransparency = 0.5
-                    hl.OutlineColor = Color3.new(1, 1, 1)
-
-                    local bb = Instance.new("BillboardGui", espFolder)
-                    bb.Name = "Tag"
-                    bb.Size = UDim2.new(0, 100, 0, 40)
-                    bb.AlwaysOnTop = true
-                    bb.ExtentsOffset = Vector3.new(0, 3.5, 0)
-                    bb.Adornee = char
-                    
-                    local lbl = Instance.new("TextLabel", bb)
-                    lbl.BackgroundTransparency = 1
-                    lbl.Size = UDim2.new(1, 0, 1, 0)
-                    lbl.Text = isKiller and "killer" or "survivor"
-                    lbl.TextColor3 = color
-                    lbl.Font = Enum.Font.GothamBold
-                    lbl.TextSize = 12
-                end
-            else
-                if espFolder then espFolder:Destroy() end
+    if not SETTINGS.Visual.ESP then
+        for p, data in pairs(espCache) do
+            if data.folder and data.folder.Parent then
+                data.folder:Destroy()
             end
+        end
+        espCache = {}
+        return
+    end
+
+    local activePlayers = {}
+    
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            activePlayers[p] = true
+            local char = p.Character
+            
+            if not espCache[p] or not espCache[p].folder.Parent then
+                local isKiller = char:GetAttribute("Team") == "EXE" or p:GetAttribute("Team") == "EXE"
+                local color = isKiller and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
+                
+                local espFolder = Instance.new("Folder", char)
+                espFolder.Name = "OutcomeESP"
+
+                local hl = Instance.new("Highlight", espFolder)
+                hl.Adornee = char
+                hl.FillColor = color
+                hl.FillTransparency = 0.5
+                hl.OutlineColor = Color3.new(1, 1, 1)
+
+                local bb = Instance.new("BillboardGui", espFolder)
+                bb.Name = "Tag"
+                bb.Size = UDim2.new(0, 100, 0, 40)
+                bb.AlwaysOnTop = true
+                bb.ExtentsOffset = Vector3.new(0, 3.5, 0)
+                bb.Adornee = char
+                
+                local lbl = Instance.new("TextLabel", bb)
+                lbl.BackgroundTransparency = 1
+                lbl.Size = UDim2.new(1, 0, 1, 0)
+                lbl.Text = isKiller and "killer" or "survivor"
+                lbl.TextColor3 = color
+                lbl.Font = Enum.Font.GothamBold
+                lbl.TextSize = 12
+                
+                espCache[p] = {folder = espFolder}
+            end
+        end
+    end
+    
+    for p, data in pairs(espCache) do
+        if not activePlayers[p] then
+            if data.folder and data.folder.Parent then
+                data.folder:Destroy()
+            end
+            espCache[p] = nil
         end
     end
 end
 
--- --- ГЛАВНЫЙ ЦИКЛ (ФИКС ТЕЛЕПОРТАЦИИ) ---
+local espUpdateInterval = 0.1
+local lastESPUpdate = 0
+
 RunService.RenderStepped:Connect(function()
-    updateESP()
+    local now = tick()
+    
+    if now - lastESPUpdate >= espUpdateInterval then
+        updateESP()
+        lastESPUpdate = now
+    end
 
     if SETTINGS.TriggerBot.Enabled then
         local char = player.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
         
         if root then
-            -- СОЗДАНИЕ ХИТБОКСА (БЕЗ ФИЗИКИ)
             if not probe or probe.Parent ~= char then
                 if probe then probe:Destroy() end
                 
@@ -91,26 +115,22 @@ RunService.RenderStepped:Connect(function()
                 probe.Massless = true
                 probe.Transparency = 0.7
                 probe.Color = Color3.fromRGB(255, 255, 0)
-                -- Убираем физику на 100%
                 probe.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
                 probe.Parent = char
 
-                -- Используем обычный Weld вместо WeldConstraint для стабильности смещения
                 probeWeld = Instance.new("Weld")
                 probeWeld.Part0 = root
                 probeWeld.Part1 = probe
                 probeWeld.Parent = probe
             end
 
-            -- Обновляем длину и смещение через Weld.C1 (ЭТО НЕ ТЕПАЕТ)
             local dist = SETTINGS.TriggerBot.Distance
             probe.Size = Vector3.new(7, 7, dist)
-            probeWeld.C1 = CFrame.new(0, 0, dist/2) -- Смещение ровно на половину длины вперед
+            probeWeld.C1 = CFrame.new(0, 0, dist/2)
 
-            -- Твоя логика триггера
-            if tick() - lastAttackTime >= SETTINGS.TriggerBot.Cooldown then
-                local foundEnemy = false
+            if now - lastAttackTime >= SETTINGS.TriggerBot.Cooldown then
                 local parts = workspace:GetPartsInPart(probe)
+                local foundEnemy = false
 
                 for _, part in ipairs(parts) do
                     local m = part.Parent
@@ -121,9 +141,11 @@ RunService.RenderStepped:Connect(function()
                 end
 
                 if foundEnemy then
-                    lastAttackTime = tick()
+                    lastAttackTime = now
                     if mouse1press then 
-                        mouse1press() task.wait(0.01) mouse1release()
+                        mouse1press()
+                        task.wait(0.01)
+                        mouse1release()
                     else 
                         game:GetService("VirtualUser"):ClickButton1(Vector2.new(0,0)) 
                     end
@@ -131,13 +153,26 @@ RunService.RenderStepped:Connect(function()
             end
         end
     else
-        if probe then probe:Destroy(); probe = nil end
+        if probe then 
+            probe:Destroy()
+            probe = nil
+            probeWeld = nil
+        end
     end
 end)
 
--- --- ИНТЕРФЕЙС ---
+Players.PlayerRemoving:Connect(function(p)
+    if espCache[p] then
+        if espCache[p].folder and espCache[p].folder.Parent then
+            espCache[p].folder:Destroy()
+        end
+        espCache[p] = nil
+    end
+end)
+
 local screenGui = Instance.new("ScreenGui", CoreGui)
 screenGui.Name = "OutcomeMemoriesUI"
+screenGui.ResetOnSpawn = false
 
 local header = Instance.new("Frame", screenGui)
 header.Size = UDim2.new(0, 340, 0, 35)
