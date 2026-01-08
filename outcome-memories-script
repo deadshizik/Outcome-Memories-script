@@ -25,73 +25,70 @@ local SETTINGS = {
 local probe = nil
 local probeWeld = nil
 local lastAttackTime = 0
-local espCache = {}
+
+local function clearAllESP()
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Character then
+            local espFolder = p.Character:FindFirstChild("OutcomeESP")
+            if espFolder then
+                espFolder:Destroy()
+            end
+        end
+    end
+end
 
 local function updateESP()
     if not SETTINGS.Visual.ESP then
-        for p, data in pairs(espCache) do
-            if data.folder and data.folder.Parent then
-                data.folder:Destroy()
-            end
-        end
-        espCache = {}
+        clearAllESP()
         return
     end
-
-    local activePlayers = {}
     
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= player and p.Character then
-            activePlayers[p] = true
             local char = p.Character
+            local espFolder = char:FindFirstChild("OutcomeESP")
             
-            if not espCache[p] or not espCache[p].folder.Parent then
+            if not espFolder then
                 local isKiller = char:GetAttribute("Team") == "EXE" or p:GetAttribute("Team") == "EXE"
                 local color = isKiller and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
                 
-                local espFolder = Instance.new("Folder", char)
+                espFolder = Instance.new("Folder")
                 espFolder.Name = "OutcomeESP"
+                espFolder.Parent = char
 
-                local hl = Instance.new("Highlight", espFolder)
+                local hl = Instance.new("Highlight")
                 hl.Adornee = char
                 hl.FillColor = color
                 hl.FillTransparency = 0.5
                 hl.OutlineColor = Color3.new(1, 1, 1)
+                hl.Parent = espFolder
 
-                local bb = Instance.new("BillboardGui", espFolder)
+                local bb = Instance.new("BillboardGui")
                 bb.Name = "Tag"
                 bb.Size = UDim2.new(0, 100, 0, 40)
                 bb.AlwaysOnTop = true
                 bb.ExtentsOffset = Vector3.new(0, 3.5, 0)
                 bb.Adornee = char
+                bb.Parent = espFolder
                 
-                local lbl = Instance.new("TextLabel", bb)
+                local lbl = Instance.new("TextLabel")
                 lbl.BackgroundTransparency = 1
                 lbl.Size = UDim2.new(1, 0, 1, 0)
                 lbl.Text = isKiller and "killer" or "survivor"
                 lbl.TextColor3 = color
                 lbl.Font = Enum.Font.GothamBold
                 lbl.TextSize = 12
-                
-                espCache[p] = {folder = espFolder}
+                lbl.Parent = bb
             end
-        end
-    end
-    
-    for p, data in pairs(espCache) do
-        if not activePlayers[p] then
-            if data.folder and data.folder.Parent then
-                data.folder:Destroy()
-            end
-            espCache[p] = nil
         end
     end
 end
 
-local espUpdateInterval = 0.1
+local espUpdateInterval = 0.2
 local lastESPUpdate = 0
+local renderConnection
 
-RunService.RenderStepped:Connect(function()
+renderConnection = RunService.RenderStepped:Connect(function()
     local now = tick()
     
     if now - lastESPUpdate >= espUpdateInterval then
@@ -105,7 +102,11 @@ RunService.RenderStepped:Connect(function()
         
         if root then
             if not probe or probe.Parent ~= char then
-                if probe then probe:Destroy() end
+                if probe then 
+                    probe:Destroy()
+                    probe = nil
+                    probeWeld = nil
+                end
                 
                 probe = Instance.new("Part")
                 probe.Name = "Outcome_Trigger_Fixed"
@@ -129,12 +130,10 @@ RunService.RenderStepped:Connect(function()
             probeWeld.C1 = CFrame.new(0, 0, dist/2)
 
             if now - lastAttackTime >= SETTINGS.TriggerBot.Cooldown then
-                local parts = workspace:GetPartsInPart(probe)
                 local foundEnemy = false
-
-                for _, part in ipairs(parts) do
+                for _, part in ipairs(workspace:GetPartsInPart(probe)) do
                     local m = part.Parent
-                    if m:FindFirstChild("Humanoid") and m ~= char then
+                    if m and m:FindFirstChild("Humanoid") and m ~= char then
                         foundEnemy = true
                         break
                     end
@@ -162,42 +161,62 @@ RunService.RenderStepped:Connect(function()
 end)
 
 Players.PlayerRemoving:Connect(function(p)
-    if espCache[p] then
-        if espCache[p].folder and espCache[p].folder.Parent then
-            espCache[p].folder:Destroy()
+    if p.Character then
+        local espFolder = p.Character:FindFirstChild("OutcomeESP")
+        if espFolder then
+            espFolder:Destroy()
         end
-        espCache[p] = nil
     end
 end)
 
-local screenGui = Instance.new("ScreenGui", CoreGui)
+local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "OutcomeMemoriesUI"
 screenGui.ResetOnSpawn = false
+screenGui.Parent = CoreGui
 
-local header = Instance.new("Frame", screenGui)
+local header = Instance.new("Frame")
 header.Size = UDim2.new(0, 340, 0, 35)
 header.Position = UDim2.new(0.5, -170, 0.3, 0)
-header.BackgroundColor3 = Color3.fromRGB(30, 30, 30); header.BorderSizePixel = 0
-header.Draggable, header.Active = true, true
+header.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+header.BorderSizePixel = 0
+header.Draggable = true
+header.Active = true
+header.Parent = screenGui
 
-local title = Instance.new("TextLabel", header)
-title.Size = UDim2.new(1, -70, 1, 0); title.Position = UDim2.new(0, 15, 0, 0)
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -70, 1, 0)
+title.Position = UDim2.new(0, 15, 0, 0)
 title.Text = "outcome memories | dc: @deadshizik"
-title.TextColor3 = Color3.new(1, 1, 1); title.Font = Enum.Font.GothamBold; title.TextSize = 13
-title.TextXAlignment = Enum.TextXAlignment.Left; title.BackgroundTransparency = 1
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 13
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.BackgroundTransparency = 1
+title.Parent = header
 
-local mainBody = Instance.new("Frame", header)
+local mainBody = Instance.new("Frame")
 mainBody.Size = UDim2.new(1, 0, 0, 180)
 mainBody.Position = UDim2.new(0, 0, 1, 1)
-mainBody.BackgroundColor3 = Color3.fromRGB(0, 0, 0); mainBody.BorderSizePixel = 0
+mainBody.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+mainBody.BorderSizePixel = 0
+mainBody.Parent = header
 
-local sideBar = Instance.new("Frame", mainBody)
-sideBar.Size = UDim2.new(0, 80, 1, 0); sideBar.BackgroundColor3 = Color3.fromRGB(10, 10, 10); sideBar.BorderSizePixel = 0
+local sideBar = Instance.new("Frame")
+sideBar.Size = UDim2.new(0, 80, 1, 0)
+sideBar.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+sideBar.BorderSizePixel = 0
+sideBar.Parent = mainBody
 
-local minimizeBtn = Instance.new("TextButton", header)
-minimizeBtn.Size = UDim2.new(0, 25, 0, 25); minimizeBtn.Position = UDim2.new(1, -30, 0, 5)
-minimizeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45); minimizeBtn.BorderSizePixel = 0
-minimizeBtn.Text = "-"; minimizeBtn.TextColor3 = Color3.new(1, 1, 1); minimizeBtn.Font = Enum.Font.GothamBold; minimizeBtn.TextSize = 18
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0, 25, 0, 25)
+minimizeBtn.Position = UDim2.new(1, -30, 0, 5)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+minimizeBtn.BorderSizePixel = 0
+minimizeBtn.Text = "-"
+minimizeBtn.TextColor3 = Color3.new(1, 1, 1)
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.TextSize = 18
+minimizeBtn.Parent = header
 
 minimizeBtn.MouseButton1Click:Connect(function()
     mainBody.Visible = not mainBody.Visible
@@ -205,19 +224,43 @@ minimizeBtn.MouseButton1Click:Connect(function()
 end)
 
 local function createToggle(parent, text, pos, default, callback)
-    local frame = Instance.new("Frame", parent)
-    frame.Size = UDim2.new(1, 0, 0, 30); frame.Position = pos; frame.BackgroundTransparency = 1
-    local lbl = Instance.new("TextLabel", frame)
-    lbl.Size = UDim2.new(0, 120, 1, 0); lbl.Text = text:lower(); lbl.TextColor3 = Color3.fromRGB(180, 180, 180)
-    lbl.Font = Enum.Font.Gotham; lbl.TextSize = 12; lbl.BackgroundTransparency = 1; lbl.TextXAlignment = Enum.TextXAlignment.Left
-    local bg = Instance.new("Frame", frame)
-    bg.Size = UDim2.new(0, 34, 0, 16); bg.Position = UDim2.new(1, -34, 0.5, -8)
-    bg.BackgroundColor3 = Color3.fromRGB(20, 20, 20); bg.BorderSizePixel = 1; bg.BorderColor3 = Color3.fromRGB(50, 50, 50)
-    local box = Instance.new("Frame", bg)
-    box.Size = UDim2.new(0, 8, 0, 8); box.Position = default and UDim2.new(1, -11, 0.5, -4) or UDim2.new(0, 3, 0.5, -4)
-    box.BackgroundColor3 = default and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(60, 60, 60); box.BorderSizePixel = 0
-    local btn = Instance.new("TextButton", bg)
-    btn.Size = UDim2.new(1, 0, 1, 0); btn.BackgroundTransparency = 1; btn.Text = ""
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 0, 30)
+    frame.Position = pos
+    frame.BackgroundTransparency = 1
+    frame.Parent = parent
+    
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0, 120, 1, 0)
+    lbl.Text = text:lower()
+    lbl.TextColor3 = Color3.fromRGB(180, 180, 180)
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 12
+    lbl.BackgroundTransparency = 1
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = frame
+    
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(0, 34, 0, 16)
+    bg.Position = UDim2.new(1, -34, 0.5, -8)
+    bg.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    bg.BorderSizePixel = 1
+    bg.BorderColor3 = Color3.fromRGB(50, 50, 50)
+    bg.Parent = frame
+    
+    local box = Instance.new("Frame")
+    box.Size = UDim2.new(0, 8, 0, 8)
+    box.Position = default and UDim2.new(1, -11, 0.5, -4) or UDim2.new(0, 3, 0.5, -4)
+    box.BackgroundColor3 = default and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(60, 60, 60)
+    box.BorderSizePixel = 0
+    box.Parent = bg
+    
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text = ""
+    btn.Parent = bg
+    
     btn.MouseButton1Click:Connect(function()
         default = not default
         box.Position = default and UDim2.new(1, -11, 0.5, -4) or UDim2.new(0, 3, 0.5, -4)
@@ -227,19 +270,45 @@ local function createToggle(parent, text, pos, default, callback)
 end
 
 local function createSlider(parent, text, pos, minV, maxV, default, callback)
-    local frame = Instance.new("Frame", parent)
-    frame.Size = UDim2.new(1, 0, 0, 45); frame.Position = pos; frame.BackgroundTransparency = 1
-    local lbl = Instance.new("TextLabel", frame)
-    lbl.Size = UDim2.new(1, 0, 0, 15); lbl.Text = text:lower(); lbl.TextColor3 = Color3.fromRGB(130, 130, 130)
-    lbl.Font = Enum.Font.Gotham; lbl.TextSize = 11; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.BackgroundTransparency = 1
-    local sBack = Instance.new("Frame", frame)
-    sBack.Size = UDim2.new(1, -50, 0, 2); sBack.Position = UDim2.new(0, 0, 0, 30); sBack.BackgroundColor3 = Color3.fromRGB(50, 50, 50); sBack.BorderSizePixel = 0
-    local sBtn = Instance.new("Frame", sBack)
-    sBtn.Size = UDim2.new(0, 4, 0, 12); sBtn.Position = UDim2.new((default - minV)/(maxV - minV), -2, 0.5, -6)
-    sBtn.BackgroundColor3 = Color3.fromRGB(200, 200, 200); sBtn.BorderSizePixel = 0
-    local valLbl = Instance.new("TextLabel", frame)
-    valLbl.Size = UDim2.new(0, 40, 0, 20); valLbl.Position = UDim2.new(1, -40, 0, 21); valLbl.Text = tostring(default)
-    valLbl.TextColor3 = Color3.new(1, 1, 1); valLbl.Font = Enum.Font.Code; valLbl.TextSize = 11; valLbl.BackgroundTransparency = 1
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 0, 45)
+    frame.Position = pos
+    frame.BackgroundTransparency = 1
+    frame.Parent = parent
+    
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 0, 15)
+    lbl.Text = text:lower()
+    lbl.TextColor3 = Color3.fromRGB(130, 130, 130)
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 11
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.BackgroundTransparency = 1
+    lbl.Parent = frame
+    
+    local sBack = Instance.new("Frame")
+    sBack.Size = UDim2.new(1, -50, 0, 2)
+    sBack.Position = UDim2.new(0, 0, 0, 30)
+    sBack.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    sBack.BorderSizePixel = 0
+    sBack.Parent = frame
+    
+    local sBtn = Instance.new("Frame")
+    sBtn.Size = UDim2.new(0, 4, 0, 12)
+    sBtn.Position = UDim2.new((default - minV)/(maxV - minV), -2, 0.5, -6)
+    sBtn.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+    sBtn.BorderSizePixel = 0
+    sBtn.Parent = sBack
+    
+    local valLbl = Instance.new("TextLabel")
+    valLbl.Size = UDim2.new(0, 40, 0, 20)
+    valLbl.Position = UDim2.new(1, -40, 0, 21)
+    valLbl.Text = tostring(default)
+    valLbl.TextColor3 = Color3.new(1, 1, 1)
+    valLbl.Font = Enum.Font.Code
+    valLbl.TextSize = 11
+    valLbl.BackgroundTransparency = 1
+    valLbl.Parent = frame
 
     local dragging = false
     local function update(input)
@@ -254,26 +323,42 @@ local function createSlider(parent, text, pos, minV, maxV, default, callback)
     UserInputService.InputChanged:Connect(function(i) if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then update(i) end end)
 end
 
-local killerTab = Instance.new("Frame", mainBody)
-killerTab.Size = UDim2.new(1, -100, 1, -20); killerTab.Position = UDim2.new(0, 90, 0, 10); killerTab.BackgroundTransparency = 1
-local visualTab = Instance.new("Frame", mainBody)
-visualTab.Size = UDim2.new(1, -100, 1, -20); visualTab.Position = UDim2.new(0, 90, 0, 10); visualTab.BackgroundTransparency = 1
+local killerTab = Instance.new("Frame")
+killerTab.Size = UDim2.new(1, -100, 1, -20)
+killerTab.Position = UDim2.new(0, 90, 0, 10)
+killerTab.BackgroundTransparency = 1
+killerTab.Parent = mainBody
+
+local visualTab = Instance.new("Frame")
+visualTab.Size = UDim2.new(1, -100, 1, -20)
+visualTab.Position = UDim2.new(0, 90, 0, 10)
+visualTab.BackgroundTransparency = 1
 visualTab.Visible = false
+visualTab.Parent = mainBody
 
 local function makeTabBtn(name, frame, pos)
-    local b = Instance.new("TextButton", sideBar)
-    b.Size = UDim2.new(1, 0, 0, 45); b.Position = UDim2.new(0, 0, 0, pos)
-    b.Text = name; b.Font = Enum.Font.GothamBold; b.BorderSizePixel = 0
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, 0, 0, 45)
+    b.Position = UDim2.new(0, 0, 0, pos)
+    b.Text = name
+    b.Font = Enum.Font.GothamBold
+    b.BorderSizePixel = 0
     b.BackgroundColor3 = frame.Visible and Color3.fromRGB(20, 20, 20) or Color3.fromRGB(0, 0, 0)
     b.TextColor3 = frame.Visible and Color3.new(1, 1, 1) or Color3.new(0.5, 0.5, 0.5)
+    b.Parent = sideBar
+    
     b.MouseButton1Click:Connect(function()
-        killerTab.Visible = false; visualTab.Visible = false; frame.Visible = true
+        killerTab.Visible = false
+        visualTab.Visible = false
+        frame.Visible = true
         for _, v in ipairs(sideBar:GetChildren()) do
             if v:IsA("TextButton") then
-                v.BackgroundColor3 = Color3.fromRGB(0, 0, 0); v.TextColor3 = Color3.new(0.5, 0.5, 0.5)
+                v.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+                v.TextColor3 = Color3.new(0.5, 0.5, 0.5)
             end
         end
-        b.BackgroundColor3 = Color3.fromRGB(20, 20, 20); b.TextColor3 = Color3.new(1, 1, 1)
+        b.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+        b.TextColor3 = Color3.new(1, 1, 1)
     end)
 end
 
@@ -283,3 +368,13 @@ makeTabBtn("visual", visualTab, 45)
 createToggle(killerTab, "trigger bot", UDim2.new(0, 0, 0, 0), SETTINGS.TriggerBot.Enabled, function(v) SETTINGS.TriggerBot.Enabled = v end)
 createSlider(killerTab, "distance", UDim2.new(0, 0, 0, 40), 1, 25, SETTINGS.TriggerBot.Distance, function(v) SETTINGS.TriggerBot.Distance = v end)
 createToggle(visualTab, "esp", UDim2.new(0, 0, 0, 0), SETTINGS.Visual.ESP, function(v) SETTINGS.Visual.ESP = v end)
+
+screenGui.Destroying:Connect(function()
+    if renderConnection then
+        renderConnection:Disconnect()
+    end
+    clearAllESP()
+    if probe then
+        probe:Destroy()
+    end
+end)
