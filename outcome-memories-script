@@ -6,7 +6,7 @@ local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 
-for _, name in pairs({"OutcomeMemoriesUI", "autosolver_final"}) do
+for _, name in pairs({"OutcomeMemoriesUI", "gay"}) do
     local old = CoreGui:FindFirstChild(name) or player.PlayerGui:FindFirstChild(name)
     if old then old:Destroy() end
 end
